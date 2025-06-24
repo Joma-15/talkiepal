@@ -2,7 +2,8 @@ import os
 from groq import Groq
 import json
 from dotenv import load_dotenv
-import sounddevice
+import numpy as np
+import sounddevice as sd
 from scipy.io.wavfile import write#for saving the recorded audio as a wav file
 
 class EnvConfig: 
@@ -29,9 +30,13 @@ class GroqAPI(EnvConfig):
 
 class SpeechFileConverter: 
     def __init__(self):
-        self.fs = 44100 #crucial for audio quality to define the number of rate in audio 
+        self.fs = 16000 #crucial for audio quality to define the number of rate in audio 
+        self.silence_thresh = 100
+        self.silence_sec = 2.5
+        self.chunk_sec = 0.1
 
-    def record_audio(self, audio): 
-        
+    def record_until_silence(self): 
+        chunks = []#storage for each chunck that will be record
+
 
         
