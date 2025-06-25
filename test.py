@@ -1,10 +1,9 @@
 import os 
-from groq import Groq
 import json
+from groq import Groq
 from dotenv import load_dotenv
 import numpy as np
 import sounddevice as sd
-import threading
 from scipy.io.wavfile import write#for saving the recorded audio as a wav file
 import time
 import queue
@@ -17,10 +16,10 @@ class EnvConfig:
         if not self.key: 
             raise ValueError("missing api key")
         
-        @property
-        def key(self): 
-            return self._key
-        
+    @property
+    def key(self): 
+        return self._key
+    
 
 
 class GroqAPI(EnvConfig): 
@@ -31,7 +30,39 @@ class GroqAPI(EnvConfig):
             api_key=self.key
         )
 
+    def convert_speech_to_text(self): 
+        self.filename = os.path.dirname(__file__) + '/voice.wav'
+
+        #open audio file 
+        with open(self.filename, "rb") as file: 
+            transcription = self.client.audio.transcriptions.create(
+                file=file, # Required audio file
+                model="whisper-large-v3-turbo", # Required model to use for transcription
+                prompt="Specify context or spelling",  # Optional
+                response_format="verbose_json",  # Optional
+                timestamp_granularities = ["word", "segment"], # Optional (must set response_format to "json" to use and can specify "word", "segment" (default), or both)
+                language="en",  # Optional
+                temperature=0.0  # Optional
+            )
+            return transcription.text#will be pass to ai response
         
+
+    def talk_to_ai(self, system_content: str, user_content: str): 
+        chat = self.client.chat.completions.create(
+            messages=[
+                {#for ai role
+                    "role":  "system", 
+                    "content": system_content
+                }, 
+                #for user role 
+                {
+                    "role": "user", 
+                    "content": user_content
+                }
+            ]
+        )
+
+
 
 class RealTimeRecorder:
     def __init__(self, device_index=5):
@@ -82,13 +113,16 @@ class RealTimeRecorder:
             print("⚠️ No audio recorded.")
             return
         audio_data = np.concatenate(self.audio_chunks, axis=0)
-        write("final_output.wav", self.fs, audio_data)
+        write("voice.wav", self.fs, audio_data)
         print("✅ File saved as final_output.wav")
 
 def main():
     recorder = RealTimeRecorder(device_index=5)  # Use your actual working mic index
+    ai = GroqAPI()
+
     recorder.record()
     recorder.save()
+    ai.convert_speech_to_text()
 
 if __name__ == "__main__":
     main()
