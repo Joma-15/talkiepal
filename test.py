@@ -23,6 +23,8 @@ class EnvConfig:
     
 
 
+
+
 class GroqAPI(EnvConfig): 
     def __init__(self):
         super().__init__()#fix parent class constructor
@@ -73,23 +75,8 @@ class GroqAPI(EnvConfig):
         print(f'user : {self.user_prompt}\n\n')
         print(f'ai : {ai_message}')
         return ai_message
-
     
-    def convert_text_to_speech(self): 
-        self.file_path = "aiVoice.wav"
-        self.model = "playai-tts"
-        self.voice = 'Arista-PlayAI'
-        self.text = self.talk_to_ai()
-        self.response_format = 'wav'
 
-        self.response = self.client.audio.speech.create(
-            model=self.model, 
-            voice=self.voice, 
-            input=self.text, 
-            response_format=self.response_format
-        )
-        #saving the speech to the wav file 
-        self.response.write_to_file(self.file_path)
 
 
 
@@ -148,6 +135,9 @@ class RealTimeRecorder:
         print("✅ File saved as final_output.wav")
 
 
+
+
+
 class ElevenLabsConfig(GroqAPI): 
     def __init__(self):
         super().__init__()
@@ -157,18 +147,26 @@ class ElevenLabsConfig(GroqAPI):
 
     def generate_audio(self): 
         self.audio = self.elevenlabs.text_to_speech.convert(
-            
+            text=self.talk_to_ai(), 
+            voice_id="wP7XBmkAmRwrjtfK2KeY", 
+            model_id="eleven_multilingual_v2",
+            output_format="mp3_44100_128", 
         )
+        play(self.audio)
+
+
+
+
 
 def main():
     recorder = RealTimeRecorder(device_index=5)  # Use your actual working mic index
-    ai = GroqAPI()
+    ai = ElevenLabsConfig()
 
     while True: 
         try: 
             recorder.record()
             recorder.save()
-            ai.convert_text_to_speech()
+            ai.generate_audio()
 
         except Exception as e: 
             print(f'An error occured : {e}')
