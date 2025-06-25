@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 import numpy as np
 import sounddevice as sd
 from scipy.io.wavfile import write#for saving the recorded audio as a wav file
+from elevenlabs.client import ElevenLabs
+from elevenlabs import play
 import time
 import queue
 
@@ -28,6 +30,10 @@ class GroqAPI(EnvConfig):
         self.client = Groq(
             api_key=self.key
         )
+        self.converstation_history = [{
+            "role": "system", 
+            "content": "you are my cool genz bestfriend bro gangsta"
+        }]
 
     def convert_speech_to_text(self): 
         self.filename = os.path.dirname(__file__) + '/voice.wav'
@@ -46,26 +52,45 @@ class GroqAPI(EnvConfig):
             return transcription.text#will be pass to ai response
         
 
-    def talk_to_ai(self, system_content="you are a helpful assistant"): 
+    def talk_to_ai(self): 
         self.user_prompt = self.convert_speech_to_text()
+        self.converstation_history.append({
+            "role": "user", 
+             "content": self.user_prompt
+        })
 
         #initialize ai text generation
         self.chat = self.client.chat.completions.create(
-            messages=[
-                {#for ai role
-                    "role":  "system", 
-                    "content": system_content
-                }, 
-                #for user role 
-                {
-                    "role": "user", 
-                    "content": self.user_prompt
-                }
-            ],
-             model="llama-3.3-70b-versatile"
+            messages=self.converstation_history,
+            model="llama-3.3-70b-versatile"
         )
+        ai_message = self.chat.choices[0].message.content
+        self.converstation_history.append({
+            "role": "assistant", 
+            "content": ai_message
+        })
+
         print(f'user : {self.user_prompt}\n\n')
-        print(f'ai : {self.chat.choices[0].message.content}')
+        print(f'ai : {ai_message}')
+        return ai_message
+
+    
+    def convert_text_to_speech(self): 
+        self.file_path = "aiVoice.wav"
+        self.model = "playai-tts"
+        self.voice = 'Arista-PlayAI'
+        self.text = self.talk_to_ai()
+        self.response_format = 'wav'
+
+        self.response = self.client.audio.speech.create(
+            model=self.model, 
+            voice=self.voice, 
+            input=self.text, 
+            response_format=self.response_format
+        )
+        #saving the speech to the wav file 
+        self.response.write_to_file(self.file_path)
+
 
 
 class RealTimeRecorder:
@@ -76,7 +101,7 @@ class RealTimeRecorder:
         self.silence_timeout = 1.5  # seconds of silence before stopping
         self.recording = False
         self.q = queue.Queue()
-        self.audio_chunks = []
+        # self.audio_chunks = []
 
         # Set default input device globally
         sd.default.device = (device_index, None)
@@ -88,7 +113,7 @@ class RealTimeRecorder:
     def record(self):
         print("🎤 Start speaking...")
         self.recording = False#to reset the voice detected from the prev call of the function
-        self.audio_chunks = []# to override the previous value of chunks
+        # self.audio_chunks = []# to override the previous value of chunks
 
         with sd.InputStream(samplerate=self.fs, channels=self.channels, dtype='int16', callback=self.callback):
             silence_timer = None
@@ -97,7 +122,7 @@ class RealTimeRecorder:
                 data = self.q.get()
                 volume = np.linalg.norm(data)
 
-                print(f"🔊 Volume: {volume:.2f}")
+                # print(f"🔊 Volume: {volume:.2f}")
 
                 if volume > self.silence_thresh:
                     if not self.recording:
@@ -126,6 +151,14 @@ class RealTimeRecorder:
 class ElevenLabsConfig(GroqAPI): 
     def __init__(self):
         super().__init__()
+        self.elevenlabs = ElevenLabs(
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+        )
+
+    def generate_audio(self): 
+        self.audio = self.elevenlabs.text_to_speech.convert(
+            
+        )
 
 def main():
     recorder = RealTimeRecorder(device_index=5)  # Use your actual working mic index
@@ -135,13 +168,13 @@ def main():
         try: 
             recorder.record()
             recorder.save()
-            ai.talk_to_ai()
+            ai.convert_text_to_speech()
 
         except Exception as e: 
             print(f'An error occured : {e}')
 
         #to cool down the the conversation 
-        time.sleep(5)
+        # time.sleep(5)
 
 if __name__ == "__main__":
     main()
