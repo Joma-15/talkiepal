@@ -1,5 +1,4 @@
 import os 
-import json
 from groq import Groq
 from dotenv import load_dotenv
 import numpy as np
@@ -47,8 +46,11 @@ class GroqAPI(EnvConfig):
             return transcription.text#will be pass to ai response
         
 
-    def talk_to_ai(self, system_content: str, user_content: str): 
-        chat = self.client.chat.completions.create(
+    def talk_to_ai(self, system_content="you are a helpful assistant"): 
+        self.user_prompt = self.convert_speech_to_text()
+
+        #initialize ai text generation
+        self.chat = self.client.chat.completions.create(
             messages=[
                 {#for ai role
                     "role":  "system", 
@@ -57,18 +59,20 @@ class GroqAPI(EnvConfig):
                 #for user role 
                 {
                     "role": "user", 
-                    "content": user_content
+                    "content": self.user_prompt
                 }
-            ]
+            ],
+             model="llama-3.3-70b-versatile"
         )
-
+        print(f'user : {self.user_prompt}\n\n')
+        print(f'ai : {self.chat.choices[0].message.content}')
 
 
 class RealTimeRecorder:
     def __init__(self, device_index=5):
         self.fs = 16000
         self.channels = 1
-        self.silence_thresh = 500
+        self.silence_thresh = 500 
         self.silence_timeout = 1.5  # seconds of silence before stopping
         self.recording = False
         self.q = queue.Queue()
@@ -83,6 +87,8 @@ class RealTimeRecorder:
 
     def record(self):
         print("🎤 Start speaking...")
+        self.recording = False#to reset the voice detected from the prev call of the function
+        self.audio_chunks = []# to override the previous value of chunks
 
         with sd.InputStream(samplerate=self.fs, channels=self.channels, dtype='int16', callback=self.callback):
             silence_timer = None
@@ -116,13 +122,26 @@ class RealTimeRecorder:
         write("voice.wav", self.fs, audio_data)
         print("✅ File saved as final_output.wav")
 
+
+class ElevenLabsConfig(GroqAPI): 
+    def __init__(self):
+        super().__init__()
+
 def main():
     recorder = RealTimeRecorder(device_index=5)  # Use your actual working mic index
     ai = GroqAPI()
 
-    recorder.record()
-    recorder.save()
-    ai.convert_speech_to_text()
+    while True: 
+        try: 
+            recorder.record()
+            recorder.save()
+            ai.talk_to_ai()
+
+        except Exception as e: 
+            print(f'An error occured : {e}')
+
+        #to cool down the the conversation 
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
